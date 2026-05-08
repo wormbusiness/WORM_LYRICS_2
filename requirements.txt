@@ -1,0 +1,19 @@
+# Core Telegram library (async, v20+)
+python-telegram-bot==20.8
+
+# HTTP client for lrclib.net API
+requests==2.32.3
+
+# SoundCloud search + audio download
+yt-dlp==2024.5.27
+
+# Video rendering
+moviepy==1.0.3
+numpy==1.26.4
+
+# Image / text compositing (multilingual via Noto fonts)
+Pillow==10.4.0
+
+# moviepy dependency that isn't always auto-installed
+imageio==2.34.2
+imageio-ffmpeg==0.5.1
