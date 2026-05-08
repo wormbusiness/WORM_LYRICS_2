@@ -147,26 +147,31 @@ async def handle_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"Enter the range as `M:SS-M:SS`\n"
         f"_Example:_ `0:45-1:15` _(30-second clip)_\n"
         f"{hint}\n\n"
-        f"Or type `nil` to use the default `0:45-1:15`.",
+        f"Or send /nil to use the default `0:45-1:15`.",
         parse_mode="Markdown",
     )
     return AWAITING_TIMESTAMP
 
 
+async def cmd_nil(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Shortcut command: use the default 0:45–1:15 timestamp."""
+    context.user_data["start_sec"] = 45.0
+    context.user_data["end_sec"] = 75.0
+    await _render_and_send(update, context)
+    return ConversationHandler.END
+
+
 async def handle_timestamp(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
 
-    if text.lower() == "nil":
-        start_sec, end_sec = 45.0, 75.0
-    else:
-        try:
-            start_sec, end_sec = parse_timestamp(text)
-        except Exception:
-            await update.message.reply_text(
-                "❌ Couldn't parse that. Use `M:SS-M:SS` (e.g. `1:10-1:45`) or `nil`.",
-                parse_mode="Markdown",
-            )
-            return AWAITING_TIMESTAMP
+    try:
+        start_sec, end_sec = parse_timestamp(text)
+    except Exception:
+        await update.message.reply_text(
+            "❌ Couldn't parse that. Use `M:SS-M:SS` (e.g. `1:10-1:45`) or /nil for default.",
+            parse_mode="Markdown",
+        )
+        return AWAITING_TIMESTAMP
 
     if end_sec <= start_sec:
         await update.message.reply_text("❌ End time must be after start time.")
@@ -178,7 +183,12 @@ async def handle_timestamp(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     context.user_data["start_sec"] = start_sec
     context.user_data["end_sec"] = end_sec
+    await _render_and_send(update, context)
+    return ConversationHandler.END
 
+
+async def _render_and_send(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Shared render + send logic used by both handle_timestamp and cmd_nil."""
     progress_msg = await update.message.reply_text(
         "🎬 Got it! Downloading audio and rendering your lyric video…\n"
         "_(This usually takes 30–90 seconds.)_",
@@ -299,11 +309,17 @@ def main():
                 CallbackQueryHandler(handle_confirm)
             ],
             AWAITING_TIMESTAMP: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, handle_timestamp)
+                # /nil first so it's matched before the text handler
+                CommandHandler("nil", cmd_nil),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, handle_timestamp),
             ],
         },
         fallbacks=[CommandHandler("start", cmd_start)],
-        allow_reentry=True,
+        # allow_reentry MUST stay False (the default).
+        # Setting it True causes any text to re-trigger handle_query (the
+        # entry_point text handler) even mid-conversation — that is why
+        # typing "nil" was restarting the song search instead of setting
+        # the default timestamp.
     )
 
     app.add_handler(conv)
